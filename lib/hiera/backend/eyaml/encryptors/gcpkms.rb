@@ -11,15 +11,9 @@ class Hiera
 
           self.tag = "GCPKMS"
 
-          self.options = {
-            :key_id => { :desc => "GCP KMS Key ID",
-                            :type => :string,
-                            :default => "",
-            }
-          }
-
           def self.decrypt ciphertext
-            return "sekrit_password"
+            plaintext=`/usr/local/bin/decrypt_kms.sh #{ciphertext}`
+            return plaintext
           end
 
         end
