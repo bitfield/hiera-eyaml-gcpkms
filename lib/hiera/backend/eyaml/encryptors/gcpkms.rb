@@ -15,6 +15,7 @@ class Hiera
       module Encryptors
 
         class GcpKms < Encryptor
+          Cloudkms   = Google::Apis::CloudkmsV1 # Alias the module
 
           self.tag = "GCPKMS"
           self.options = {
@@ -22,51 +23,34 @@ class Hiera
               :type => :string,
               :default => "",
             },
-            :location_id => { :desc => "GCP KMS key location",
-              :type => :string,
-              :default => "global",
-            },
-            :project_id => { :desc => "GCP project",
-              :type => :string,
-              :default => "",
-            }
-
           }
 
           def self.init
             # Instantiate the client
-            Cloudkms   = Google::Apis::CloudkmsV1 # Alias the module
-            kms_client = Cloudkms::CloudKMSService.new
+            @kms_client = Cloudkms::CloudKMSService.new
 
             # Set the required scopes to access the Key Management Service API
             # @see https://developers.google.com/identity/protocols/application-default-credentials#callingruby
-            kms_client.authorization = Google::Auth.get_application_default(
+            @kms_client.authorization = Google::Auth.get_application_default(
               "https://www.googleapis.com/auth/cloud-platform"
             )
-
-            # The resource name of the location associated with the key rings
-            parent = "projects/#{project_id}/locations/#{location_id}"
-
-            # Request list of key rings
-            response = kms_client.list_project_location_key_rings parent
-
-            # List all key rings for your project
-            puts "Key Rings: "
-            if response.key_rings
-              response.key_rings.each do |key_ring|
-                puts key_ring.name
-              end
-            else
-              puts "No key rings found"
-            end
-
+            @key_id = self.option :key_id
           end
 
-          def self.decrypt ciphertext
-            plaintext=`echo "#{Base64.encode64(ciphertext)}" | /usr/local/bin/decrypt_kms.sh`
-            return plaintext.chomp
+          def self.encrypt(plaintext)
+            self.init()
+            encrypt_request = Cloudkms::EncryptRequest.new(:plaintext => plaintext)
+            response = @kms_client.encrypt_crypto_key(@key_id, encrypt_request)
+            return Base64.encode64(response.ciphertext.chomp)
           end
 
+
+          def self.decrypt(ciphertext)
+            self.init()
+            decrypt_request = Cloudkms::DecryptRequest.new(:ciphertext => Base64.decode64(ciphertext))
+            response = @kms_client.decrypt_crypto_key(@key_id, decrypt_request)
+            return response.plaintext
+          end
         end
       end
     end
